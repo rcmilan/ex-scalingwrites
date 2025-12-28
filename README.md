@@ -1,131 +1,196 @@
-# Database Sharding Example - Scaling Writes
+# Database Sharding Tutorial: Scaling Writes with .NET and MySQL
 
-This project demonstrates a practical implementation of database sharding to scale write operations in a .NET application. The architecture uses consistent hashing to distribute data across multiple MySQL database shards, enabling horizontal scaling for write-heavy workloads.
+This tutorial guides you through implementing database sharding to scale write operations in a .NET application. You'll learn how to distribute data across multiple MySQL database shards using consistent hashing, enabling horizontal scaling for write-heavy workloads.
 
-## 🎯 What This Project Demonstrates
+## 🎯 What You'll Learn
 
-This example showcases how to implement database sharding to solve the problem of write scalability in high-traffic applications. Instead of having all data in a single database that becomes a bottleneck, this system distributes data across multiple database instances (shards) based on a sharding key.
+By the end of this tutorial, you'll understand:
+- **Database Sharding Concepts**: How to distribute data across multiple databases
+- **Consistent Hashing**: A technique for even data distribution and minimal rebalancing
+- **EF Core Integration**: Implementing sharding with Entity Framework Core
+- **Real-World Implementation**: Building a REST API with sharded data
 
-**Key Benefits:**
+**Key Benefits of Sharding:**
 - **Horizontal Write Scaling**: Distribute write operations across multiple database instances
 - **Improved Performance**: Reduce contention and increase throughput
 - **Fault Isolation**: Database issues in one shard don't affect others
 - **Scalability**: Add more shards as your data grows
 
-## 🏗️ Architecture Overview
+## 📋 Prerequisites
 
-### Core Components
-
-#### 1. Sharding Infrastructure
-
-The sharding infrastructure is the core of this system, responsible for determining which database shard should handle each operation. It consists of several key components that work together to provide a robust and scalable sharding solution.
-
-**Key Components and Their Responsibilities:**
-
-- **`IShardResolver`**: This interface defines the contract for resolving which shard to use for a given sharding key. It provides the primary method `ResolveShard<T>(T key)` that takes a sharding key and returns the appropriate `ShardDescriptor`. This abstraction allows for different resolution implementations while maintaining a consistent API.
-
-- **`ShardResolver`**: The main implementation of `IShardResolver` that acts as a coordinator between different sharding strategies. It maintains a collection of `IShardResolutionStrategy` instances and determines which strategy to use based on the type of the sharding key. The resolver follows a delegation pattern, passing the resolution request to the most appropriate strategy.
-
-- **`IShardResolutionStrategy`**: This interface defines the contract for different sharding algorithms. Each strategy implementation is responsible for mapping sharding keys to specific shards using its own algorithm. The interface includes methods for resolving shards and retrieving all available shards for operations that need to span multiple shards.
-
-- **`IntHashShardStrategy`**: A concrete implementation of `IShardResolutionStrategy` designed for integer-based sharding keys (like User IDs). It uses consistent hashing to distribute integer keys evenly across available shards. This strategy is particularly useful for auto-incrementing primary keys and sequential data.
-
-- **`GuidHashShardStrategy`**: Another concrete implementation of `IShardResolutionStrategy` optimized for GUID-based sharding keys (like Publication IDs). It handles the conversion of GUIDs to hash values and applies consistent hashing to determine shard placement. This strategy is ideal for distributed systems where GUIDs are generated across multiple services.
-
-- **`ConsistentHashRing`**: The heart of the consistent hashing implementation. This component manages a virtual ring structure where each physical shard is represented by multiple virtual nodes (100 by default). The hash ring provides even distribution of keys across shards and minimizes data movement when shards are added or removed. It uses SHA256 hashing for consistent and reliable hash generation.
-
-**Component Interactions:**
-
-The components interact in a well-defined flow:
-
-1. **Request Entry**: When an operation requires database access, the application calls `ShardResolver.ResolveShard<T>(key)`
-2. **Strategy Selection**: `ShardResolver` examines the type of the key and selects the appropriate strategy (`IntHashShardStrategy` for integers, `GuidHashShardStrategy` for GUIDs)
-3. **Shard Resolution**: The selected strategy uses `ConsistentHashRing` to map the key to a specific shard
-4. **Result Return**: The strategy returns the `ShardDescriptor` containing connection information
-5. **Context Creation**: The database context factory uses this descriptor to create a connection to the appropriate shard
-
-**Data Flow Through the Sharding System:**
-
-1. **Key Generation**: Application generates or receives a sharding key (User ID, Publication ID, etc.)
-2. **Shard Resolution**: The sharding infrastructure determines which shard should handle this key
-3. **Connection Establishment**: A database context is created with the shard-specific connection string
-4. **Operation Execution**: All CRUD operations for that entity are performed on the designated shard
-5. **Result Return**: Data is retrieved from or stored to the appropriate shard
-
-**Implementation Details and Design Patterns:**
-
-- **Strategy Pattern**: Different sharding algorithms are implemented as separate strategy classes that can be easily extended or replaced
-- **Factory Pattern**: Database contexts are created through factories that encapsulate the complexity of shard selection
-- **Dependency Injection**: All components are registered with the DI container for loose coupling and testability
-- **Interface Segregation**: Each interface has a focused responsibility, making the system more maintainable
-- **Consistent Hashing**: Uses virtual nodes to ensure even distribution and minimize rebalancing when shards change
-
-**Architectural Decisions and Rationale:**
-
-1. **Consistent Hashing over Simple Modulo**: Chosen for its ability to minimize data movement when adding/removing shards, which is crucial for production systems
-2. **Virtual Nodes**: Implemented to improve distribution evenness and reduce the impact of adding new shards
-3. **Type-Based Strategy Selection**: Allows the system to handle different key types optimally without requiring explicit strategy specification
-4. **Interface-Based Design**: Enables easy testing, mocking, and future extensibility
-5. **SHA256 Hashing**: Selected for its cryptographic properties and even distribution characteristics
-6. **100 Virtual Nodes per Shard**: This ratio provides good distribution while maintaining reasonable performance for hash ring operations
-
-#### 2. Database Context
-- **`ShardedDbContext`**: Entity Framework Core context configured for sharding
-- **`ShardedDbContextFactory`**: Factory for creating context instances with the correct shard connection
-- **`ShardedDesignTimeFactory`**: Factory for EF Core tooling (migrations, scaffolding)
-
-#### 3. Models
-- **`User`**: Entity with integer ID (sharded by ID)
-- **`Publication`**: Entity with GUID ID (sharded by ID)
-- **Many-to-Many Relationship**: Users can have multiple publications
-
-#### 4. Configuration
-- **`ShardDescriptor`**: Represents a single database shard with ID, name, and connection string
-- **`ShardConfigurationHelper`**: Loads shard configuration from app settings
-
-## 📊 Sharding Strategy
-
-This implementation uses **consistent hashing** to distribute data evenly across shards:
-
-1. **Hash Function**: SHA256 is used to generate consistent hash values
-2. **Virtual Nodes**: Each physical shard is represented by 100 virtual nodes in the hash ring
-3. **Even Distribution**: This approach minimizes data movement when adding/removing shards
-4. **Multiple Strategies**: Support for both integer and GUID sharding keys
-
-### How It Works
-1. When a request comes in with a sharding key (e.g., User ID)
-2. The system determines the appropriate sharding strategy based on the key type
-3. The strategy uses consistent hashing to map the key to a specific shard
-4. A database context is created with the shard's connection string
-5. All operations for that entity are performed on the designated shard
-
-## 🚀 Setup and Installation
-
-### Prerequisites
-- .NET 10.0 SDK
+Before starting, ensure you have:
+- .NET 10.0 SDK (or later)
 - Docker and Docker Compose
-- MySQL 8.0+ (or use the provided Docker setup)
+- Basic knowledge of C#, ASP.NET Core, and Entity Framework Core
+- Understanding of relational databases and SQL
 
-### 1. Database Setup
+## 🏗️ Step 1: Understanding the Architecture
 
-The project includes a `docker-compose.yaml` file that sets up two MySQL instances with four shards:
+This project implements sharding using several key components. Let's examine each one:
+
+### 1.1 Sharding Infrastructure
+
+The sharding system consists of interfaces and implementations that determine which database shard handles each operation.
+
+#### Core Interfaces
+
+**[`IShardResolver`](ScalingWrites.Core/Data/Configurations/IShardResolver.cs)**: Defines the contract for shard resolution.
+```csharp
+public interface IShardResolver
+{
+    ShardDescriptor Resolve(object shardKey);
+}
+```
+
+**[`IShardResolutionStrategy`](ScalingWrites.Core/Data/Configurations/IShardResolutionStrategy.cs)**: Defines strategies for different key types.
+```csharp
+public interface IShardResolutionStrategy
+{
+    bool CanResolve(object shardKey);
+    ShardDescriptor Resolve(object shardKey, IReadOnlyList<ShardDescriptor> shards);
+}
+```
+
+#### Implementations
+
+**[`ShardResolver`](ScalingWrites.Core/Data/Configurations/ShardResolver.cs)**: The main resolver that delegates to appropriate strategies.
+```csharp
+public sealed class ShardResolver(IReadOnlyList<ShardDescriptor> shards, IEnumerable<IShardResolutionStrategy> strategies) : IShardResolver
+{
+    public ShardDescriptor Resolve(object shardKey)
+    {
+        var strategy = strategies.FirstOrDefault(s => s.CanResolve(shardKey));
+        return strategy is null
+            ? throw new InvalidOperationException($"No shard strategy registered for key type {shardKey?.GetType().Name}")
+            : strategy.Resolve(shardKey, shards);
+    }
+}
+```
+
+**[`IntHashShardStrategy`](ScalingWrites.Core/Data/Configurations/IntHashShardStrategy.cs)** and **[`GuidHashShardStrategy`](ScalingWrites.Core/Data/Configurations/GuidHashShardStrategy.cs)**: Strategies for integer and GUID keys using consistent hashing.
+
+**[`ConsistentHashRing`](ScalingWrites.Core/Data/Configurations/ConsistentHashRing.cs)**: Implements consistent hashing with virtual nodes.
+```csharp
+public sealed class ConsistentHashRing
+{
+    private readonly SortedDictionary<int, ShardDescriptor> _ring = [];
+
+    public ConsistentHashRing(IEnumerable<ShardDescriptor> shards, int replicas = 100)
+    {
+        foreach (var shard in shards)
+        {
+            for (int i = 0; i < replicas; i++)
+            {
+                var key = Hash($"{shard.Name}:{i}");
+                _ring[key] = shard;
+            }
+        }
+    }
+
+    public ShardDescriptor Resolve(string key)
+    {
+        var node = _ring.Keys.FirstOrDefault(k => k >= Hash(key));
+        if (node == 0) node = _ring.Keys.First();
+        return _ring[node];
+    }
+
+    private static int Hash(string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return BitConverter.ToInt32(bytes, 0);
+    }
+}
+```
+
+### 1.2 Database Context Layer
+
+**[`ShardedDbContext`](ScalingWrites.Core/Data/ShardedDbContext.cs)**: EF Core context with your entities.
+```csharp
+public class ShardedDbContext : DbContext
+{
+    public ShardedDbContext(DbContextOptions<ShardedDbContext> options) : base(options) { }
+
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Publication> Publications => Set<Publication>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Entity configurations here
+    }
+}
+```
+
+**[`ShardedDbContextFactory`](ScalingWrites.Core/Data/ShardedDbContextFactory.cs)**: Creates context instances for specific shards.
+```csharp
+public sealed class ShardedDbContextFactory(IShardResolver resolver) : IShardedDbContextFactory, IDbContextFactory<ShardedDbContext>
+{
+    public ShardedDbContext CreateDbContext(object shardKey)
+    {
+        var shard = resolver.Resolve(shardKey);
+        var optionsBuilder = new DbContextOptionsBuilder<ShardedDbContext>();
+        optionsBuilder.UseMySQL(shard.ConnectionString);
+        return new ShardedDbContext(optionsBuilder.Options);
+    }
+
+    public ShardedDbContext CreateDbContext() => CreateDbContext(shardKey: 0);
+}
+```
+
+### 1.3 Models
+
+**[`User`](ScalingWrites.Core/Models/User.cs)**: Entity with auto-generated GUID ID.
+```csharp
+public class User
+{
+    public Guid Id { get; } = Guid.NewGuid();
+    public required string Name { get; set; }
+    public List<Publication> Publications { get; } = [];
+}
+```
+
+**[`Publication`](ScalingWrites.Core/Models/Publication.cs)**: Entity with GUID ID (note: ID should be settable for EF Core).
+```csharp
+public class Publication
+{
+    public Guid Id { get; set; }  // Should be settable
+    public required DateTime CreatedAt { get; set; } = DateTime.Now;
+    public required string Title { get; set; }
+}
+```
+
+### 1.4 Configuration
+
+**[`ShardDescriptor`](ScalingWrites.Core/Data/Configurations/ShardDescriptor.cs)**: Represents a shard.
+```csharp
+public record ShardDescriptor(int Id, string Name, string ConnectionString);
+```
+
+**[`ShardConfigurationHelper`](ScalingWrites.Core/Helpers/ShardConfigurationHelper.cs)**: Loads shards from configuration.
+
+## 🚀 Step 2: Setting Up the Environment
+
+### 2.1 Start the Database Infrastructure
+
+The project includes a Docker Compose setup for four MySQL shards across two instances:
 
 ```bash
-# Start the database infrastructure
+# Clone or navigate to the project directory
+cd ex-scalingwrites
+
+# Start the databases
 docker-compose up -d
 
 # Verify containers are running
 docker-compose ps
 ```
 
-**Database Configuration:**
-- **MySQL Instance 1** (Port 3307): Hosts Shard0 and Shard1
-- **MySQL Instance 2** (Port 3308): Hosts Shard2 and Shard3
-- Each instance has its own user credentials for security isolation
+This creates:
+- **MySQL Instance 1** (Port 3307): Hosts `shard0` and `shard1` databases
+- **MySQL Instance 2** (Port 3308): Hosts `shard2` and `shard3` databases
 
-### 2. Application Configuration
+### 2.2 Configure the Application
 
-The `appsettings.json` file contains the shard connection strings:
+The **[`appsettings.json`](ScalingWrites.Core/appsettings.json)** file contains shard connection strings:
 
 ```json
 {
@@ -138,29 +203,49 @@ The `appsettings.json` file contains the shard connection strings:
 }
 ```
 
-### 3. Running Migrations
+Services are registered in **[`Program.cs`](ScalingWrites.Core/Program.cs)**:
 
-Use the provided PowerShell script to apply migrations to all shards:
+```csharp
+builder.Services.AddSingleton(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return ShardConfigurationHelper.LoadShards(config);
+});
+
+builder.Services.AddSingleton<IShardResolver, ShardResolver>();
+builder.Services.AddSingleton<IShardedDbContextFactory, ShardedDbContextFactory>();
+builder.Services.AddSingleton<IShardResolutionStrategy, IntHashShardStrategy>();
+builder.Services.AddSingleton<IShardResolutionStrategy, GuidHashShardStrategy>();
+```
+
+## 🔄 Step 3: Running Database Migrations
+
+### 3.1 Apply Migrations to All Shards
+
+Use the provided PowerShell script:
 
 ```bash
-# Run migrations on all shards
+# Apply migrations to all shards
 ./migrate-all.ps1
 ```
 
-**Manual Migration Process:**
-The script performs these steps for each shard:
-1. Sets the `SHARD_NAME` environment variable
-2. Executes `dotnet ef database update` with the shard-specific connection string
-3. Ensures all shards have the same schema
+This script:
+1. Sets the `SHARD_NAME` environment variable for each shard
+2. Runs `dotnet ef database update` with the appropriate connection
 
-**Individual Shard Migration:**
+### 3.2 Manual Migration (Optional)
+
+For a specific shard:
+
 ```bash
-# Migrate a specific shard
+# Migrate Shard0
 $env:SHARD_NAME="Shard0"
 dotnet ef database update
 ```
 
-### 4. Running the Application
+The **[`ShardedDesignTimeFactory`](ScalingWrites.Core/Data/ShardedDesignTimeFactory.cs)** handles design-time operations by reading the `--shard` argument or defaulting to `Shard0`.
+
+## 🏃 Step 4: Running the Application
 
 ```bash
 # Navigate to the project directory
@@ -170,218 +255,183 @@ cd ScalingWrites.Core
 dotnet run
 ```
 
-The API will be available at `https://localhost:5001` and `http://localhost:5000`.
+The API will be available at:
+- HTTPS: `https://localhost:5001`
+- HTTP: `http://localhost:5000`
+- Swagger UI: `https://localhost:5001/swagger`
 
-## 🔄 Migration Strategy for Multiple Shards
+## 📝 Step 5: Exploring the API
 
-### Challenge
-Traditional EF Core migrations work with a single database connection, but sharding requires applying the same schema changes to multiple databases.
+### 5.1 Users Endpoints
 
-### Solution
-This project implements a multi-step migration process:
+The **[`UsersController`](ScalingWrites.Core/Controllers/UsersController.cs)** demonstrates sharding in action:
 
-1. **Environment Variable Approach**: Use `SHARD_NAME` environment variable to specify which shard to migrate
-2. **Automated Script**: `migrate-all.ps1` script handles migrating all shards sequentially
-3. **Design-Time Factory**: `ShardedDesignTimeFactory` reads the environment variable and connects to the appropriate shard
-
-### Migration Commands
-
+**Create User** (`POST /api/users`):
 ```bash
-# Create a new migration
-dotnet ef migrations add NewFeature
-
-# Apply to all shards (recommended)
-./migrate-all.ps1
-
-# Apply to specific shard
-$env:SHARD_NAME="Shard1"
-dotnet ef database update
+curl -X POST "https://localhost:5001/api/users" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "John Doe"}'
 ```
 
-## 📝 API Endpoints
-
-The project includes placeholder controllers for the two main entities:
-
-### Users Controller
-- **Base URL**: `/api/users`
-- **Sharding Key**: User ID (integer)
-- **Strategy**: `IntHashShardStrategy`
-
-### Publications Controller  
-- **Base URL**: `/api/publications`
-- **Sharding Key**: Publication ID (GUID)
-- **Strategy**: `GuidHashShardStrategy`
-
-**Note**: The controllers are currently empty placeholders. They would typically implement CRUD operations that use the sharding infrastructure.
-
-## 🔧 Usage Examples
-
-### Creating Database Context for a Specific Shard
-
-```csharp
-// Inject the factory
-private readonly IDbContextFactory<ShardedDbContext> _contextFactory;
-
-// Create context for a specific user (integer sharding key)
-var userContext = _contextFactory.CreateDbContext(userId);
-
-// Create context for a specific publication (GUID sharding key)
-var publicationContext = _contextFactory.CreateDbContext(publicationId);
+**Get User** (`GET /api/users/{id}`):
+```bash
+curl "https://localhost:5001/api/users/{user-id}"
 ```
 
-### Service Implementation Pattern
+### 5.2 Implementation Details
+
+The controller uses dependency injection:
 
 ```csharp
-public class UserService
+[HttpPost]
+public async Task<ActionResult<PostUserOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostUserInput input)
 {
-    private readonly IDbContextFactory<ShardedDbContext> _contextFactory;
-    
-    public async Task<User> GetUserById(int userId)
+    var user = new User { Name = input.Name };
+    await using var db = contextFactory.CreateDbContext(user.Id);
+    await using var tx = await db.Database.BeginTransactionAsync();
+
+    try
     {
-        using var context = _contextFactory.CreateDbContext(userId);
-        return await context.Users.FindAsync(userId);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return Ok(new PostUserOutput(user.Id));
     }
-    
-    public async Task AddUser(User user)
+    catch (Exception)
     {
-        using var context = _contextFactory.CreateDbContext(user.Id);
-        context.Users.Add(user);
-        await context.SaveChangesAsync();
+        await tx.RollbackAsync();
+        throw;
     }
 }
 ```
 
-## 🧪 Testing the Sharding
+Note: The GET endpoint uses manual SQL due to MySQL .NET 10 compatibility issues.
 
-### Verify Shard Distribution
-You can test that data is properly distributed by:
-1. Creating users with different IDs
-2. Checking which database each user is stored in
-3. Verifying that related publications are in the same shard
+## 🧪 Step 6: Testing Shard Distribution
 
-### Performance Testing
-- Create multiple concurrent write operations
-- Monitor database performance across shards
-- Verify that writes are distributed evenly
+### 6.1 Verify Data Distribution
 
-## 📈 Scaling Considerations
+1. Create multiple users with different GUIDs
+2. Check which database stores each user
+3. Observe how the consistent hashing distributes data evenly
 
-### Adding New Shards
-1. Update `appsettings.json` with new connection string
-2. Run migrations on the new shard
-3. The consistent hashing algorithm will automatically redistribute data
+### 6.2 Understanding the Flow
 
-### Monitoring
-- Monitor write performance across all shards
-- Track shard utilization and balance
-- Set up alerts for shard-specific issues
+When you create a user:
+1. A new GUID is generated for the User ID
+2. `IShardedDbContextFactory.CreateDbContext(user.Id)` resolves the shard
+3. `ShardResolver.Resolve(user.Id)` selects the appropriate strategy (`GuidHashShardStrategy`)
+4. `ConsistentHashRing.Resolve(user.Id.ToString())` determines the target shard
+5. A `ShardedDbContext` is created with the shard's connection string
+6. The user is saved to the correct shard
 
-### Backup Strategy
-- Implement shard-specific backup procedures
-- Consider cross-shard backup coordination
-- Plan for disaster recovery scenarios
+## 🔧 Step 7: Implementing Your Own Sharded Entities
 
-## 🚀 Future Improvements
+### 7.1 Add a New Entity
 
-This sharding implementation provides a solid foundation, but several enhancements could significantly improve its production readiness and capabilities:
+1. Create the model class with a sharding key
+2. Add it to `ShardedDbContext`
+3. Create or reuse a sharding strategy
+4. Add API endpoints
 
-### Cross-Shard Query Support
-- **Challenge**: Current implementation requires knowing the sharding key to access data, limiting complex queries that span multiple shards
-- **Solution**: Implement a query router that can:
-  - Distribute queries across relevant shards based on query patterns
-  - Aggregate results from multiple shards
-  - Handle JOIN operations that span shards
-  - Provide query optimization for cross-shard operations
+### 7.2 Example: Adding Products
 
-### Caching Layer Integration
-- **Multi-Level Caching Strategy**:
-  - **Application-Level Cache**: Redis or similar for frequently accessed data
-  - **Shard-Level Cache**: Local caching within each shard's context
-  - **Query Result Cache**: Cache complex query results with appropriate invalidation
-- **Cache Invalidation**: Implement strategies to keep cached data consistent with database changes
-- **Cache Warming**: Pre-populate cache with frequently accessed data patterns
+```csharp
+// Model
+public class Product
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public required string Name { get; set; }
+    public decimal Price { get; set; }
+}
 
-### Monitoring and Metrics
-- **Shard-Level Metrics**:
-  - Query performance per shard
-  - Storage utilization and growth trends
-  - Connection pool usage and health
-  - Error rates and patterns
-- **Cross-Shard Analytics**:
-  - Data distribution analysis
-  - Query pattern analysis
-  - Performance bottlenecks identification
-- **Alerting System**: Set up alerts for:
-  - Shard overload or failure
-  - Data distribution imbalances
-  - Performance degradation
-  - Storage capacity limits
+// Add to ShardedDbContext
+public DbSet<Product> Products => Set<Product>();
 
-### Read Replicas Implementation
-- **Read/Write Separation**: Route read operations to replicas and writes to primary shards
-- **Replica Management**: Automated replica creation, synchronization, and failover
-- **Load Balancing**: Distribute read traffic across multiple replicas
-- **Consistency Models**: Implement appropriate consistency levels for different use cases
+// Controller
+[HttpPost]
+public async Task<IActionResult> CreateProduct([FromServices] IShardedDbContextFactory factory, [FromBody] CreateProductRequest request)
+{
+    var product = new Product { Name = request.Name, Price = request.Price };
+    await using var context = factory.CreateDbContext(product.Id);
+    context.Products.Add(product);
+    await context.SaveChangesAsync();
+    return Ok(new { product.Id });
+}
+```
 
-### Sharding Key Migration Strategies
-- **Dynamic Sharding**: Ability to change sharding keys without data migration
-- **Shard Splitting**: Split existing shards when they reach capacity
-- **Shard Merging**: Combine underutilized shards to optimize resource usage
-- **Zero-Downtime Migrations**: Implement migration strategies that don't require system downtime
+## 📈 Step 8: Scaling and Maintenance
 
-### Distributed Transactions Support
-- **Two-Phase Commit (2PC)**: Implement distributed transaction protocols for operations spanning multiple shards
-- **Saga Pattern**: Use compensating transactions for long-running distributed operations
-- **Eventual Consistency**: Implement patterns for scenarios where strong consistency isn't required
-- **Transaction Monitoring**: Track and manage distributed transactions across shards
+### 8.1 Adding New Shards
 
-### Automatic Shard Rebalancing
-- **Load-Based Rebalancing**: Automatically redistribute data based on usage patterns
-- **Storage-Based Rebalancing**: Move data when shards reach storage thresholds
-- **Performance-Based Rebalancing**: Optimize shard distribution based on query performance
-- **Intelligent Algorithms**: Use machine learning to predict and optimize shard distribution
+1. Update `docker-compose.yaml` with new MySQL instances/databases
+2. Add connection strings to `appsettings.json`
+3. Run migrations on the new shard
+4. Restart the application (consistent hashing handles redistribution automatically)
 
-### Additional Enhancements
-- **Security Enhancements**: Implement shard-level security policies and encryption
-- **Backup and Recovery**: Automated backup strategies for individual shards and cross-shard consistency
-- **Development Tools**: CLI tools for shard management, data migration, and debugging
-- **Documentation and Examples**: Comprehensive examples for common sharding patterns and use cases
+### 8.2 Monitoring
 
-### Implementation Priority
-1. **High Priority**: Monitoring, caching, read replicas
-2. **Medium Priority**: Cross-shard queries, automatic rebalancing
-3. **Low Priority**: Advanced transaction support, sophisticated migration tools
+- Monitor write performance per shard
+- Track data distribution balance
+- Set up alerts for shard failures
 
-These improvements would transform this basic sharding implementation into a production-ready, enterprise-grade distributed database system capable of handling complex workloads at scale.
+### 8.3 Backup Strategy
 
-## 🛠️ Development and Maintenance
+- Implement per-shard backup procedures
+- Ensure backup coordination across shards
+- Plan for disaster recovery
 
-### Adding New Entities
-1. Add the entity to `ShardedDbContext`
-2. Create appropriate sharding strategy if needed
-3. Update migrations
-4. Apply migrations to all shards
+## 🚀 Advanced Topics
 
-### Schema Changes
-1. Create migration using `dotnet ef migrations add`
-2. Run `./migrate-all.ps1` to apply to all shards
-3. Test the changes work correctly across all shards
+### Cross-Shard Queries
 
-## 🤝 Contributing
+The current implementation requires knowing the sharding key. For cross-shard queries, you would need:
+- A query router to distribute queries across shards
+- Result aggregation logic
+- Handling of JOINs across shards
 
-When contributing to this project:
-1. Ensure all shards remain in sync
-2. Test migrations on all shards
-3. Maintain consistent hashing behavior
-4. Update documentation for any architectural changes
+### Read Replicas
+
+To add read scaling:
+- Configure read replicas for each shard
+- Route read operations to replicas
+- Keep writes going to primary shards
+
+### Distributed Transactions
+
+For operations spanning multiple shards:
+- Implement Saga pattern or 2PC
+- Handle eventual consistency where appropriate
+- Monitor distributed transaction states
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Migration Failures**: Ensure all shards are accessible and credentials are correct
+2. **Connection Errors**: Verify Docker containers are running and ports are available
+3. **Data Not Found**: Confirm the sharding key resolves to the correct shard
+4. **Performance Issues**: Monitor shard distribution and add more shards if needed
+
+### Debugging Tips
+
+- Use logging to track which shard operations hit
+- Test with known GUIDs to verify distribution
+- Monitor database connections and query performance
 
 ## 📚 Additional Resources
 
-- [Entity Framework Core Documentation](https://docs.microsoft.com/en-us/ef/core/)
-- [MySQL Documentation](https://dev.mysql.com/doc/)
-- [Consistent Hashing](https://en.wikipedia.org/wiki/Consistent_hashing)
-- [Database Sharding Patterns](https://www.mongodb.com/basics/sharding)
+- [Entity Framework Core Documentation](https://learn.microsoft.com/en-us/ef/core/)
+- [MySQL Connector/NET Documentation](https://dev.mysql.com/doc/connector-net/en/)
+- [Consistent Hashing Explained](https://en.wikipedia.org/wiki/Consistent_hashing)
+- [Database Sharding Patterns](https://microservices.io/patterns/data/database-sharding.html)
 
-## 📄 License
+## 🎓 Next Steps
 
-This project is provided as an educational example for understanding database sharding concepts.
+Now that you understand the basics, consider:
+- Implementing cross-shard queries
+- Adding caching layers
+- Setting up monitoring and metrics
+- Exploring automatic rebalancing strategies
+
+This tutorial provides a solid foundation for building scalable, sharded database systems with .NET and MySQL.
