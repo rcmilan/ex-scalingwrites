@@ -44,19 +44,11 @@ public class UsersController : ControllerBase
     {
         await using var db = contextFactory.CreateDbContext(id);
 
-        var connection = db.Database.GetDbConnection();
-        await connection.OpenAsync();
+        var user = await db.Users.FindAsync(id);
 
-        // MySQl still does not support .NET 10 :c
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT Id, Name FROM Users WHERE Id = @id";
-        cmd.Parameters.Add(new MySqlParameter("@id", id));
-
-        using var reader = await cmd.ExecuteReaderAsync();
-
-        if (!await reader.ReadAsync())
+        if (user == null)
             return NotFound();
 
-        return Ok(new GetUserOutput(reader.GetGuid(0), reader.GetString(1)));
+        return Ok(new GetUserOutput(user.Id, user.Name));
     }
 }

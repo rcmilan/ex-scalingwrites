@@ -286,15 +286,21 @@ The controller uses dependency injection:
 [HttpPost]
 public async Task<ActionResult<PostUserOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostUserInput input)
 {
-    var user = new User { Name = input.Name };
+    var user = new User
+    {
+        Name = input.Name
+    };
+
     await using var db = contextFactory.CreateDbContext(user.Id);
     await using var tx = await db.Database.BeginTransactionAsync();
 
     try
     {
         db.Users.Add(user);
+
         await db.SaveChangesAsync();
         await tx.CommitAsync();
+
         return Ok(new PostUserOutput(user.Id));
     }
     catch (Exception)
@@ -303,9 +309,20 @@ public async Task<ActionResult<PostUserOutput>> Post([FromServices] IShardedDbCo
         throw;
     }
 }
-```
 
-Note: The GET endpoint uses manual SQL due to MySQL .NET 10 compatibility issues.
+[HttpGet("{id:guid}")]
+public async Task<ActionResult<GetUserOutput>> Get([FromServices] IShardedDbContextFactory contextFactory, [FromRoute] Guid id)
+{
+    await using var db = contextFactory.CreateDbContext(id);
+
+    var user = await db.Users.FindAsync(id);
+
+    if (user == null)
+        return NotFound();
+
+    return Ok(new GetUserOutput(user.Id, user.Name));
+}
+```
 
 ## 🧪 Step 6: Testing Shard Distribution
 
