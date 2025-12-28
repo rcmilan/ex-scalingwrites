@@ -36,6 +36,8 @@ The sharding system consists of interfaces and implementations that determine wh
 
 **[`IShardResolver`](ScalingWrites.Core/Data/Configurations/IShardResolver.cs)**: Defines the contract for shard resolution.
 ```csharp
+namespace ScalingWrites.Core.Data.Configurations;
+
 public interface IShardResolver
 {
     ShardDescriptor Resolve(object shardKey);
@@ -44,6 +46,8 @@ public interface IShardResolver
 
 **[`IShardResolutionStrategy`](ScalingWrites.Core/Data/Configurations/IShardResolutionStrategy.cs)**: Defines strategies for different key types.
 ```csharp
+namespace ScalingWrites.Core.Data.Configurations;
+
 public interface IShardResolutionStrategy
 {
     bool CanResolve(object shardKey);
@@ -55,6 +59,8 @@ public interface IShardResolutionStrategy
 
 **[`ShardResolver`](ScalingWrites.Core/Data/Configurations/ShardResolver.cs)**: The main resolver that delegates to appropriate strategies.
 ```csharp
+namespace ScalingWrites.Core.Data.Configurations;
+
 public sealed class ShardResolver(IReadOnlyList<ShardDescriptor> shards, IEnumerable<IShardResolutionStrategy> strategies) : IShardResolver
 {
     public ShardDescriptor Resolve(object shardKey)
@@ -71,12 +77,19 @@ public sealed class ShardResolver(IReadOnlyList<ShardDescriptor> shards, IEnumer
 
 **[`ConsistentHashRing`](ScalingWrites.Core/Data/Configurations/ConsistentHashRing.cs)**: Implements consistent hashing with virtual nodes.
 ```csharp
+using System.Security.Cryptography;
+using System.Text;
+
+namespace ScalingWrites.Core.Data.Configurations;
+
 public sealed class ConsistentHashRing
 {
     private readonly SortedDictionary<int, ShardDescriptor> _ring = [];
 
     public ConsistentHashRing(IEnumerable<ShardDescriptor> shards, int replicas = 100)
     {
+        if (_ring.Count > 0) return;
+
         foreach (var shard in shards)
         {
             for (int i = 0; i < replicas; i++)
@@ -106,32 +119,67 @@ public sealed class ConsistentHashRing
 
 **[`ShardedDbContext`](ScalingWrites.Core/Data/ShardedDbContext.cs)**: EF Core context with your entities.
 ```csharp
+using Microsoft.EntityFrameworkCore;
+using ScalingWrites.Core.Models;
+
+namespace ScalingWrites.Core.Data;
+
 public class ShardedDbContext : DbContext
 {
-    public ShardedDbContext(DbContextOptions<ShardedDbContext> options) : base(options) { }
+    public ShardedDbContext(DbContextOptions<ShardedDbContext> options) : base(options)
+    {
+
+    }
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Publication> Publications => Set<Publication>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Entity configurations here
+        modelBuilder.Entity<User>(e =>
+        {
+            e.HasKey(u => u.Id);
+            e.Property(u => u.Name).IsRequired();
+
+            e.HasMany(u => u.Publications)
+             .WithMany()
+             .UsingEntity("UserPublications");
+        });
+
+        modelBuilder.Entity<Publication>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Title).IsRequired();
+            e.Property(p => p.CreatedAt).IsRequired();
+        });
     }
 }
 ```
 
 **[`ShardedDbContextFactory`](ScalingWrites.Core/Data/ShardedDbContextFactory.cs)**: Creates context instances for specific shards.
 ```csharp
+using Microsoft.EntityFrameworkCore;
+using ScalingWrites.Core.Data.Configurations;
+
+namespace ScalingWrites.Core.Data;
+
 public sealed class ShardedDbContextFactory(IShardResolver resolver) : IShardedDbContextFactory, IDbContextFactory<ShardedDbContext>
 {
     public ShardedDbContext CreateDbContext(object shardKey)
     {
         var shard = resolver.Resolve(shardKey);
+        return GetShardedDbContext(shard);
+    }
+
+    public ShardedDbContext GetShardedDbContext(ShardDescriptor shard)
+    {
         var optionsBuilder = new DbContextOptionsBuilder<ShardedDbContext>();
         optionsBuilder.UseMySQL(shard.ConnectionString);
+
         return new ShardedDbContext(optionsBuilder.Options);
     }
 
+    // fallback if EF tooling calls factory
     public ShardedDbContext CreateDbContext() => CreateDbContext(shardKey: 0);
 }
 ```
@@ -140,6 +188,8 @@ public sealed class ShardedDbContextFactory(IShardResolver resolver) : IShardedD
 
 **[`User`](ScalingWrites.Core/Models/User.cs)**: Entity with auto-generated GUID ID.
 ```csharp
+namespace ScalingWrites.Core.Models;
+
 public class User
 {
     public Guid Id { get; } = Guid.NewGuid();
@@ -150,9 +200,11 @@ public class User
 
 **[`Publication`](ScalingWrites.Core/Models/Publication.cs)**: Entity with GUID ID (note: ID should be settable for EF Core).
 ```csharp
+namespace ScalingWrites.Core.Models;
+
 public class Publication
 {
-    public Guid Id { get; set; }  // Should be settable
+    public Guid Id { get; }
     public required DateTime CreatedAt { get; set; } = DateTime.Now;
     public required string Title { get; set; }
 }
@@ -162,16 +214,86 @@ public class Publication
 
 **[`ShardDescriptor`](ScalingWrites.Core/Data/Configurations/ShardDescriptor.cs)**: Represents a shard.
 ```csharp
+namespace ScalingWrites.Core.Data.Configurations;
+
 public record ShardDescriptor(int Id, string Name, string ConnectionString);
 ```
 
 **[`ShardConfigurationHelper`](ScalingWrites.Core/Helpers/ShardConfigurationHelper.cs)**: Loads shards from configuration.
+```csharp
+using ScalingWrites.Core.Data.Configurations;
+
+namespace ScalingWrites.Core.Helpers;
+
+public static class ShardConfigurationHelper
+{
+    public static IReadOnlyList<ShardDescriptor> LoadShards(IConfiguration config)
+    {
+        var shards = config
+            .GetSection("ConnectionStrings")
+            .GetChildren()
+            .Where(c => c.Key.StartsWith("Shard", StringComparison.OrdinalIgnoreCase))
+            .Select((c, index) => new ShardDescriptor(
+                index,
+                c.Key,
+                c.Value ?? throw new InvalidOperationException(
+                    $"Missing connection string for {c.Key}")
+            ))
+            .ToList();
+
+        if (shards.Count == 0)
+            throw new InvalidOperationException("No shard connection strings were found.");
+
+        return shards.AsReadOnly();
+    }
+}
+```
 
 ## 🚀 Step 2: Setting Up the Environment
 
 ### 2.1 Start the Database Infrastructure
 
 The project includes a Docker Compose setup for four MySQL shards across two instances:
+
+```yaml
+services:
+  mysql_shard1:
+    image: mysql:8.0
+    container_name: mysql_shard1
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass1
+      # no MYSQL_DATABASE so no initial DB
+    ports:
+      - "3307:3306"           # map host 3307 → container 3306
+    volumes:
+      - shard1_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+
+  mysql_shard2:
+    image: mysql:8.0
+    container_name: mysql_shard2
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass2
+      # no initial DB
+    ports:
+      - "3308:3306"           # map host 3308 → container 3306
+    volumes:
+      - shard2_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  shard1_data:
+  shard2_data:
+
+networks:
+  shard-net:
+```
 
 ```bash
 # Clone or navigate to the project directory
@@ -194,6 +316,13 @@ The **[`appsettings.json`](ScalingWrites.Core/appsettings.json)** file contains 
 
 ```json
 {
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
   "ConnectionStrings": {
     "Shard0": "server=localhost;port=3307;user=root;password=rootpass1;database=shard0;",
     "Shard1": "server=localhost;port=3307;user=root;password=rootpass1;database=shard1;",
@@ -206,16 +335,59 @@ The **[`appsettings.json`](ScalingWrites.Core/appsettings.json)** file contains 
 Services are registered in **[`Program.cs`](ScalingWrites.Core/Program.cs)**:
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+using ScalingWrites.Core.Data;
+using ScalingWrites.Core.Data.Configurations;
+using ScalingWrites.Core.Helpers;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
+    
     return ShardConfigurationHelper.LoadShards(config);
 });
 
 builder.Services.AddSingleton<IShardResolver, ShardResolver>();
+
 builder.Services.AddSingleton<IShardedDbContextFactory, ShardedDbContextFactory>();
+builder.Services.AddSingleton<IDbContextFactory<ShardedDbContext>, ShardedDbContextFactory>();
+
 builder.Services.AddSingleton<IShardResolutionStrategy, IntHashShardStrategy>();
 builder.Services.AddSingleton<IShardResolutionStrategy, GuidHashShardStrategy>();
+
+builder.Services.AddControllers();
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
+
+// Add Swagger UI services
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+
+    // Add Swagger UI middleware
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "ScalingWrites API v1");
+        c.RoutePrefix = "swagger";
+    });
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
 ```
 
 ## 🔄 Step 3: Running Database Migrations
@@ -244,6 +416,56 @@ dotnet ef database update
 ```
 
 The **[`ShardedDesignTimeFactory`](ScalingWrites.Core/Data/ShardedDesignTimeFactory.cs)** handles design-time operations by reading the `--shard` argument or defaulting to `Shard0`.
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
+using ScalingWrites.Core.Data.Configurations;
+using ScalingWrites.Core.Helpers;
+
+namespace ScalingWrites.Core.Data;
+
+public class ShardedDesignTimeFactory : IDesignTimeDbContextFactory<ShardedDbContext>
+{
+    public ShardedDbContext CreateDbContext(string[] args)
+    {
+        var config = new ConfigurationBuilder()
+            .AddJsonFile("appsettings.json")
+            .AddEnvironmentVariables()
+            .Build();
+
+        var shards = ShardConfigurationHelper.LoadShards(config);
+
+        // default shard
+        var shardName = "Shard0";
+
+        // read arg:  Update-Database -- --shard=Shard2
+        var shardArg = args?.FirstOrDefault(a => a.StartsWith("--shard=", StringComparison.OrdinalIgnoreCase));
+        if (shardArg is not null)
+            shardName = shardArg.Split("=", 2)[1];
+
+        var shard = shards.Single(s => s.Name == shardName);
+
+        var options = new DbContextOptionsBuilder<ShardedDbContext>()
+            .UseMySQL(shard.ConnectionString)
+            .Options;
+
+        return new ShardedDbContext(options);
+    }
+
+    private sealed class StaticShardResolver(IEnumerable<ShardDescriptor> shards) : IShardResolver
+    {
+        private readonly Dictionary<object, ShardDescriptor> _byId = shards.ToDictionary(s => (object)s.Id);
+
+        public ShardDescriptor Resolve(object shardKey)
+        {
+            return _byId.TryGetValue(shardKey, out var shard)
+                ? shard
+                : throw new InvalidOperationException($"Unknown shard key: {shardKey}");
+        }
+    }
+}
+```
 
 ## 🏃 Step 4: Running the Application
 
@@ -278,49 +500,172 @@ curl -X POST "https://localhost:5001/api/users" \
 curl "https://localhost:5001/api/users/{user-id}"
 ```
 
-### 5.2 Implementation Details
+### 5.2 Publications Endpoints
 
-The controller uses dependency injection:
+The **[`PublicationsController`](ScalingWrites.Core/Controllers/PublicationsController.cs)** shows sharding with relationships and cross-shard queries:
 
+**Create Publication** (`POST /api/publications`):
+```bash
+curl -X POST "https://localhost:5001/api/publications" \
+     -H "Content-Type: application/json" \
+     -d '{"title": "My First Post", "userId": "user-guid"}'
+```
+
+**Get Publication** (`GET /api/publications/{id}`):
+```bash
+curl "https://localhost:5001/api/publications/{publication-id}"
+```
+
+### 5.3 Implementation Details
+
+The controllers use dependency injection:
+
+UsersController:
 ```csharp
-[HttpPost]
-public async Task<ActionResult<PostUserOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostUserInput input)
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MySql.Data.MySqlClient;
+using ScalingWrites.Core.Data;
+using ScalingWrites.Core.IO;
+using ScalingWrites.Core.Models;
+
+namespace ScalingWrites.Core.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+public class UsersController : ControllerBase
 {
-    var user = new User
+
+    [HttpPost]
+    public async Task<ActionResult<PostUserOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostUserInput input)
     {
-        Name = input.Name
-    };
+        var user = new User
+        {
+            Name = input.Name
+        };
 
-    await using var db = contextFactory.CreateDbContext(user.Id);
-    await using var tx = await db.Database.BeginTransactionAsync();
+        await using var db = contextFactory.CreateDbContext(user.Id);
+        await using var tx = await db.Database.BeginTransactionAsync();
 
-    try
-    {
-        db.Users.Add(user);
+        try
+        {
+            db.Users.Add(user);
 
-        await db.SaveChangesAsync();
-        await tx.CommitAsync();
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
 
-        return Ok(new PostUserOutput(user.Id));
+            return Ok(new PostUserOutput(user.Id));
+        }
+        catch (Exception)
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
-    catch (Exception)
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<GetUserOutput>> Get([FromServices] IShardedDbContextFactory contextFactory, [FromRoute] Guid id)
     {
-        await tx.RollbackAsync();
-        throw;
+        await using var db = contextFactory.CreateDbContext(id);
+
+        var user = await db.Users.FindAsync(id);
+
+        if (user == null)
+            return NotFound();
+
+        return Ok(new GetUserOutput(user.Id, user.Name));
     }
 }
+```
 
-[HttpGet("{id:guid}")]
-public async Task<ActionResult<GetUserOutput>> Get([FromServices] IShardedDbContextFactory contextFactory, [FromRoute] Guid id)
+PublicationsController:
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using ScalingWrites.Core.Data;
+using ScalingWrites.Core.IO;
+using ScalingWrites.Core.Models;
+using ScalingWrites.Core.Data.Configurations;
+
+namespace ScalingWrites.Core.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+public class PublicationsController : ControllerBase
 {
-    await using var db = contextFactory.CreateDbContext(id);
+    [HttpPost]
+    public async Task<ActionResult<PostPublicationOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostPublicationInput input)
+    {
+        var publication = new Publication
+        {
+            Title = input.Title,
+            CreatedAt = DateTime.UtcNow
+        };
 
-    var user = await db.Users.FindAsync(id);
+        if (input.UserId.HasValue)
+        {
+            await using var db = contextFactory.CreateDbContext(input.UserId.Value);
+            await using var tx = await db.Database.BeginTransactionAsync();
 
-    if (user == null)
+            try
+            {
+                var user = await db.Users.FindAsync(input.UserId.Value);
+                if (user == null)
+                    return NotFound("User not found");
+
+                user.Publications.Add(publication);
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new PostPublicationOutput(publication.Id));
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+        else
+        {
+            await using var db = contextFactory.CreateDbContext(publication.Id);
+            await using var tx = await db.Database.BeginTransactionAsync();
+
+            try
+            {
+                db.Publications.Add(publication);
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new PostPublicationOutput(publication.Id));
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<GetPublicationOutput>> Get(
+        [FromServices] IReadOnlyList<ShardDescriptor> shards,
+        [FromServices] IShardedDbContextFactory contextFactory,
+        [FromRoute] Guid id)
+    {
+        foreach (var shard in shards)
+        {
+            await using var db = contextFactory.GetShardedDbContext(shard);
+
+            var publication = await db.Publications
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (publication != null)
+                return Ok(new GetPublicationOutput(publication.Id, publication.Title, publication.CreatedAt));
+        }
+
         return NotFound();
-
-    return Ok(new GetUserOutput(user.Id, user.Name));
+    }
 }
 ```
 
@@ -342,6 +687,10 @@ When you create a user:
 5. A `ShardedDbContext` is created with the shard's connection string
 6. The user is saved to the correct shard
 
+For publications, if associated with a user, it uses the user's shard key; otherwise, its own ID.
+
+For reading publications, since the shard is unknown, it queries all shards sequentially.
+
 ## 🔧 Step 7: Implementing Your Own Sharded Entities
 
 ### 7.1 Add a New Entity
@@ -350,32 +699,6 @@ When you create a user:
 2. Add it to `ShardedDbContext`
 3. Create or reuse a sharding strategy
 4. Add API endpoints
-
-### 7.2 Example: Adding Products
-
-```csharp
-// Model
-public class Product
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public required string Name { get; set; }
-    public decimal Price { get; set; }
-}
-
-// Add to ShardedDbContext
-public DbSet<Product> Products => Set<Product>();
-
-// Controller
-[HttpPost]
-public async Task<IActionResult> CreateProduct([FromServices] IShardedDbContextFactory factory, [FromBody] CreateProductRequest request)
-{
-    var product = new Product { Name = request.Name, Price = request.Price };
-    await using var context = factory.CreateDbContext(product.Id);
-    context.Products.Add(product);
-    await context.SaveChangesAsync();
-    return Ok(new { product.Id });
-}
-```
 
 ## 📈 Step 8: Scaling and Maintenance
 
