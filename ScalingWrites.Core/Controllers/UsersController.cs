@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MySql.Data.MySqlClient;
 using ScalingWrites.Core.Data;
 using ScalingWrites.Core.IO;
 using ScalingWrites.Core.Models;
@@ -35,5 +37,26 @@ public class UsersController : ControllerBase
             await tx.RollbackAsync();
             throw;
         }
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<GetUserOutput>> Get([FromServices] IShardedDbContextFactory contextFactory, [FromRoute] Guid id)
+    {
+        await using var db = contextFactory.CreateDbContext(id);
+
+        var connection = db.Database.GetDbConnection();
+        await connection.OpenAsync();
+
+        // MySQl still does not support .NET 10 :c
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT Id, Name FROM Users WHERE Id = @id";
+        cmd.Parameters.Add(new MySqlParameter("@id", id));
+
+        using var reader = await cmd.ExecuteReaderAsync();
+
+        if (!await reader.ReadAsync())
+            return NotFound();
+
+        return Ok(new GetUserOutput(reader.GetGuid(0), reader.GetString(1)));
     }
 }
