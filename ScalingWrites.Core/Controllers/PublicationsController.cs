@@ -9,7 +9,7 @@ namespace ScalingWrites.Core.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class PublicationsController : ControllerBase
+    public class PublicationsController(IReadOnlyList<ShardDescriptor> shards) : ControllerBase
     {
         [HttpPost]
         public async Task<ActionResult<PostPublicationOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostPublicationInput input)
@@ -65,16 +65,27 @@ namespace ScalingWrites.Core.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<ActionResult<GetPublicationOutput>> Get([FromServices] IShardedDbContextFactory contextFactory, [FromRoute] Guid id)
+        public async Task<ActionResult<GetPublicationOutput>> Get([FromServices] IReadOnlyList<ShardDescriptor> shards, [FromRoute] Guid id)
         {
-            await using var db = contextFactory.CreateDbContext(id);
+            foreach (var shard in shards)
+            {
+                var options = new DbContextOptionsBuilder<ShardedDbContext>()
+                    .UseMySQL(shard.ConnectionString)
+                    .Options;
 
-            var publication = await db.Publications.FindAsync(id);
+                await using var db = new ShardedDbContext(options);
 
-            if (publication == null)
-                return NotFound();
+                var publication = await db.Publications
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.Id == id);
 
-            return Ok(new GetPublicationOutput(publication.Id, publication.Title, publication.CreatedAt));
+                if (publication != null)
+                {
+                    return Ok(new GetPublicationOutput(publication.Id, publication.Title, publication.CreatedAt));
+                }
+            }
+
+            return NotFound();
         }
     }
 }
