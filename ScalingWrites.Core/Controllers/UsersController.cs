@@ -1,11 +1,14 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 
-namespace ScalingWrites.Core.Controllers
+namespace ScalingWrites.Core.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+public class UsersController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class UsersController : ControllerBase
+    [HttpPost]
+    public async Task<ActionResult> Post()
     {
+
     }
 }
