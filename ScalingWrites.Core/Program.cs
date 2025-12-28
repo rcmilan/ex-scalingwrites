@@ -13,16 +13,20 @@ builder.Services.AddSingleton(sp =>
     return ShardConfigurationHelper.LoadShards(config);
 });
 
-builder.Services.AddSingleton<IShardResolutionStrategy, IntHashShardStrategy>();
-builder.Services.AddSingleton<IShardResolutionStrategy, GuidHashShardStrategy>();
-
 builder.Services.AddSingleton<IShardResolver, ShardResolver>();
 
-builder.Services.AddScoped<IDbContextFactory<ShardedDbContext>, ShardedDbContextFactory>();
+builder.Services.AddSingleton<IShardedDbContextFactory, ShardedDbContextFactory>();
+builder.Services.AddSingleton<IDbContextFactory<ShardedDbContext>, ShardedDbContextFactory>();
+
+builder.Services.AddSingleton<IShardResolutionStrategy, IntHashShardStrategy>();
+builder.Services.AddSingleton<IShardResolutionStrategy, GuidHashShardStrategy>();
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Add Swagger UI services
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
@@ -30,6 +34,14 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    // Add Swagger UI middleware
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "ScalingWrites API v1");
+        c.RoutePrefix = "swagger";
+    });
 }
 
 app.UseHttpsRedirection();

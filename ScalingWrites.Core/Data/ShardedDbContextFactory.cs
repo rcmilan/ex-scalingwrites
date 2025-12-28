@@ -3,7 +3,7 @@ using ScalingWrites.Core.Data.Configurations;
 
 namespace ScalingWrites.Core.Data;
 
-public sealed class ShardedDbContextFactory(IShardResolver resolver) : IDbContextFactory<ShardedDbContext>
+public sealed class ShardedDbContextFactory(IShardResolver resolver) : IShardedDbContextFactory, IDbContextFactory<ShardedDbContext>
 {
     public ShardedDbContext CreateDbContext(object shardKey)
     {

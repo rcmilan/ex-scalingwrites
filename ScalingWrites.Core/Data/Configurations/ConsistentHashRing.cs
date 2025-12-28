@@ -9,6 +9,8 @@ public sealed class ConsistentHashRing
 
     public ConsistentHashRing(IEnumerable<ShardDescriptor> shards, int replicas = 100)
     {
+        if (_ring.Count > 0) return;
+
         foreach (var shard in shards)
         {
             for (int i = 0; i < replicas; i++)

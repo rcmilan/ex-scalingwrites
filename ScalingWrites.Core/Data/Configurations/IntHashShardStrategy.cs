@@ -1,6 +1,6 @@
 ﻿namespace ScalingWrites.Core.Data.Configurations;
 
-public sealed class IntHashShardStrategy(IEnumerable<ShardDescriptor> shards) : IShardResolutionStrategy
+public sealed class IntHashShardStrategy(IReadOnlyList<ShardDescriptor> shards) : IShardResolutionStrategy
 {
     private readonly ConsistentHashRing _ring = new(shards);
 
