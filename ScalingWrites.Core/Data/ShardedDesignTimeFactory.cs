@@ -9,7 +9,6 @@ public class ShardedDesignTimeFactory : IDesignTimeDbContextFactory<ShardedDbCon
 {
     public ShardedDbContext CreateDbContext(string[] args)
     {
-        // Load config the same way your app would
         var config = new ConfigurationBuilder()
             .AddJsonFile("appsettings.json")
             .AddEnvironmentVariables()
@@ -17,11 +16,18 @@ public class ShardedDesignTimeFactory : IDesignTimeDbContextFactory<ShardedDbCon
 
         var shards = ShardConfigurationHelper.LoadShards(config);
 
-        // pick canonical shard
-        var shard0 = shards[0];
+        // default shard
+        var shardName = "Shard0";
+
+        // read arg:  Update-Database -- --shard=Shard2
+        var shardArg = args?.FirstOrDefault(a => a.StartsWith("--shard=", StringComparison.OrdinalIgnoreCase));
+        if (shardArg is not null)
+            shardName = shardArg.Split("=", 2)[1];
+
+        var shard = shards.Single(s => s.Name == shardName);
 
         var options = new DbContextOptionsBuilder<ShardedDbContext>()
-            .UseMySQL(shard0.ConnectionString)
+            .UseMySQL(shard.ConnectionString)
             .Options;
 
         return new ShardedDbContext(options);

@@ -22,11 +22,7 @@ public class ShardedDbContext : DbContext
 
             e.HasMany(u => u.Publications)
              .WithMany()
-             .UsingEntity(j =>
-             {
-                 j.ToTable("UserPublications");
-                 j.HasIndex("PublicationId").IsUnique();
-             });
+             .UsingEntity("UserPublications");
         });
 
         modelBuilder.Entity<Publication>(e =>
