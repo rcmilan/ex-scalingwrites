@@ -1,0 +1,37 @@
+services:
+  mysql_shard1:
+    image: mysql:8.0
+    container_name: mysql_shard1
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass1
+      # no MYSQL_DATABASE so no initial DB
+    ports:
+      - "3307:3306"           # map host 3307 → container 3306
+    volumes:
+      - shard1_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+
+  mysql_shard2:
+    image: mysql:8.0
+    container_name: mysql_shard2
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass2
+      # no initial DB
+    ports:
+      - "3308:3306"           # map host 3308 → container 3306
+    volumes:
+      - shard2_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  shard1_data:
+  shard2_data:
+
+networks:
+  shard-net:
