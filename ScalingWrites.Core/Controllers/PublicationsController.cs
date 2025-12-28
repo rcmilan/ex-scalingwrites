@@ -65,24 +65,21 @@ namespace ScalingWrites.Core.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<ActionResult<GetPublicationOutput>> Get([FromServices] IReadOnlyList<ShardDescriptor> shards, [FromRoute] Guid id)
+        public async Task<ActionResult<GetPublicationOutput>> Get(
+            [FromServices] IReadOnlyList<ShardDescriptor> shards,
+            [FromServices] IShardedDbContextFactory contextFactory,
+            [FromRoute] Guid id)
         {
             foreach (var shard in shards)
             {
-                var options = new DbContextOptionsBuilder<ShardedDbContext>()
-                    .UseMySQL(shard.ConnectionString)
-                    .Options;
-
-                await using var db = new ShardedDbContext(options);
+                await using var db = contextFactory.GetShardedDbContext(shard);
 
                 var publication = await db.Publications
                     .AsNoTracking()
                     .FirstOrDefaultAsync(p => p.Id == id);
 
                 if (publication != null)
-                {
                     return Ok(new GetPublicationOutput(publication.Id, publication.Title, publication.CreatedAt));
-                }
             }
 
             return NotFound();

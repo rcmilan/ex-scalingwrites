@@ -8,7 +8,11 @@ public sealed class ShardedDbContextFactory(IShardResolver resolver) : IShardedD
     public ShardedDbContext CreateDbContext(object shardKey)
     {
         var shard = resolver.Resolve(shardKey);
+        return GetShardedDbContext(shard);
+    }
 
+    public ShardedDbContext GetShardedDbContext(ShardDescriptor shard)
+    {
         var optionsBuilder = new DbContextOptionsBuilder<ShardedDbContext>();
         optionsBuilder.UseMySQL(shard.ConnectionString);
 
