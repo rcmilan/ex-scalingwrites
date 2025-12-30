@@ -127,26 +127,6 @@ When you create data:
 3. Saves the data to the correct shard
 4. Returns the result to your application
 
-### Simple Architecture
-
-```mermaid
-flowchart TD
-    A[Your Application<br/>UserController.CreateUser()] --> B[IShardDbContextFactory]
-    B --> C[Hash<br/>user-guid → Shard_2]
-    C --> D[Database Shard 2]
-
-    %% Styling
-    classDef app fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    classDef factory fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef hash fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    classDef db fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-
-    class A app
-    class B factory
-    class C hash
-    class D db
-```
-
 ## 🔑 Key Concepts
 
 ### 1. Consistent Hashing
