@@ -26,14 +26,28 @@ Imagine a social media app:
 
 ### How It Works
 
-```
-Traditional Approach:
-    App → Single Database (bottleneck)
+```mermaid
+flowchart TD
+    %% Traditional Approach
+    subgraph Traditional ["Traditional Approach"]
+        A1[App] --> B1[Single Database<br/>⚠️ Bottleneck]
+    end
     
-Sharded Approach:
-    App → Shard Router → Database 1 (user data A-M)
-                              → Database 2 (user data N-Z) 
-                              → Database 3 (user data 0-9)
+    %% Sharded Approach
+    subgraph Sharded ["Sharded Approach"]
+        A2[App] --> C[Shard Router]
+        C --> D1[Database 1<br/>user data A-M]
+        C --> D2[Database 2<br/>user data N-Z]
+        C --> D3[Database 3<br/>user data 0-9]
+    end
+    
+    %% Styling
+    classDef bottleneck fill:#ffebee,stroke:#f44336,stroke-width:2px
+    classDef shard fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+    classDef router fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    class B1 bottleneck
+    class D1,D2,D3 shard
+    class C router
 ```
 
 ### Benefits of Sharding
@@ -115,18 +129,22 @@ When you create data:
 
 ### Simple Architecture
 
-```
-┌─────────────────────────────────────┐
-│         Your Application            │
-│                                     │
-│  UserController.CreateUser()        │
-│        ↓                            │
-│  IShardDbContextFactory            │
-│        ↓                            │
-│  Hash("user-guid") → "Shard_2"     │
-│        ↓                            │
-│  Database Shard 2                  │
-└─────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[Your Application<br/>UserController.CreateUser()] --> B[IShardDbContextFactory]
+    B --> C[Hash<br/>user-guid → Shard_2]
+    C --> D[Database Shard 2]
+
+    %% Styling
+    classDef app fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef factory fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef hash fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef db fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+
+    class A app
+    class B factory
+    class C hash
+    class D db
 ```
 
 ## 🔑 Key Concepts
@@ -210,12 +228,6 @@ When you create data:
 1. Implement automatic shard rebalancing
 2. Add cross-shard transactions
 3. Set up geographic shard distribution
-
-## 📚 Further Reading
-
-- [Database Sharding Concepts](https://microservices.io/patterns/data/database-sharding.html)
-- [Microsoft Sharding Pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding)
-- [Consistent Hashing Explained](https://en.wikipedia.org/wiki/Consistent_hashing)
 
 ---
 
