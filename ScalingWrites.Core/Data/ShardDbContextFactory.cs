@@ -3,7 +3,7 @@ using ScalingWrites.Core.Data.Configurations;
 
 namespace ScalingWrites.Core.Data;
 
-public sealed class ShardDbContextFactory(IShardResolver resolver) : IShardDbContextFactory, IDbContextFactory<ShardedDbContext>
+public sealed class ShardDbContextFactory(IShardResolutionStrategy resolver) : IShardDbContextFactory, IDbContextFactory<ShardedDbContext>
 {
     public async Task<ShardDescriptor> ResolveShardAsync(object shardKey)
     {

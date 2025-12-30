@@ -3,12 +3,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ScalingWrites.Core.Data.Configurations;
 
-public sealed class CrossShardQueryCoordinator(IShardMetadataStore metadataStore, IShardDbContextFactory contextFactory) : ICrossShardQueryCoordinator
+public sealed class CrossShardQueryCoordinator(IShardConfigurationService configurationService, IShardDbContextFactory contextFactory) : ICrossShardQueryCoordinator
 {
     public async Task<IEnumerable<T>> ExecuteQueryOnAllShardsAsync<T>(
         Expression<Func<ShardedDbContext, IQueryable<T>>> queryExpression) where T : class
     {
-        var shards = await metadataStore.LoadShardsAsync();
+        var shards = await configurationService.LoadShardsAsync();
         return await ExecuteQueryOnSpecificShardsAsync(shards, queryExpression);
     }
 
