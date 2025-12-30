@@ -17,7 +17,8 @@ The current implementation includes ALL major components that have been complete
 7. **Unified Context Factory**: Consolidated `IShardDbContextFactory` and `ShardDbContextFactory` that handle both routing and factory responsibilities. ✅ **COMPLETED**
 8. **Cross-Shard Query Support**: Implemented with parallel execution and result aggregation through `ICrossShardQueryCoordinator` and `CrossShardQueryCoordinator`. ✅ **COMPLETED**
 9. **Docker Compose**: Updated with 6 MySQL shards (Shard0-Shard5) and no Redis dependency, reflecting a production-ready architecture. ✅ **COMPLETED**
-10. **Shard Migration/Transaction Services**: Implemented interfaces and classes for advanced features including `IShardMigrationService`, `ITransactionCoordinator`, `ShardMigrationService`, and `TransactionCoordinator`. ✅ **COMPLETED**
+10. **Transaction Services**: Implemented interfaces and classes for advanced features including `ITransactionCoordinator` and `TransactionCoordinator`. ✅ **COMPLETED**
+    - **Note**: Data migration functionality (`IShardMigrationService`, `ShardMigrationService`) has been removed as it's not needed for basic sharding. Schema migrations are handled by `migrate-all.ps1`.
 11. **Code Quality**: Refactored to eliminate shard loading duplication and improve maintainability. ✅ **COMPLETED**
 12. **Controllers**: Updated `UsersController` and `PublicationsController` to use the unified context factory approach. ✅ **COMPLETED**
 13. **Design-Time Factory**: Implemented `ShardedDesignTimeFactory` for Entity Framework migrations support. ✅ **COMPLETED**
@@ -159,43 +160,13 @@ graph TD
 5. **Consistency Checks**: Implement periodic consistency checks between primary and backup storage.
 6. **Failure Detection**: Add health monitoring and automatic failover mechanisms.
 
-### 7. Shard Migration / Rebalancing / Hot-Spot Relief
+### 7. Shard Migration / Rebalancing / Hot-Spot Relief ❌ **NOT IMPLEMENTED**
 
 **Purpose**: Handle dynamic shard management for load balancing and scalability.
 
-**Design**:
+**Status**: ❌ **REMOVED** - Data migration functionality was removed from the codebase as it's not needed for basic sharding implementation. Schema migrations are handled by `migrate-all.ps1`.
 
-```mermaid
-graph TD
-    A[ShardManager] --> B[MigrationService]
-    A --> C[RebalancingService]
-    A --> D[HotSpotDetector]
-    B --> E[DataTransfer]
-    C --> F[LoadAnalyzer]
-    D --> G[TrafficMonitor]
-```
-
-**Implementation Steps**:
-
-1. **Shard Migration Service**:
-   - Implement data transfer protocols for moving data between shards.
-   - Support online migration with minimal downtime.
-   - Add validation and verification steps post-migration.
-
-2. **Rebalancing Service**:
-   - Implement load analysis to detect imbalanced shards.
-   - Add automatic rebalancing algorithms (e.g., consistent hashing adjustments).
-   - Support manual rebalancing triggers via API.
-
-3. **Hot-Spot Detection and Relief**:
-   - Implement real-time traffic monitoring.
-   - Add dynamic shard splitting for hot shards.
-   - Support temporary traffic redirection during hot-spot conditions.
-
-4. **Safety Mechanisms**:
-   - Implement rate limiting during migrations.
-   - Add rollback capabilities for failed migrations.
-   - Support gradual traffic shifting to new shards.
+**Note**: This advanced feature would require significant additional infrastructure for production-ready shard migration, rebalancing, and hot-spot relief. The current sharding implementation focuses on basic data distribution and querying across fixed shards.
 
 ### 8. Cross-Shard Transaction Guarantees & Constraints
 
@@ -355,27 +326,29 @@ graph TD
    - Added automatic failover detection.
    - Created alerting for metadata store issues.
 
-### Phase 7: Shard Migration / Rebalancing / Hot-Spot Relief ✅ **COMPLETED**
+### Phase 7: Shard Migration / Rebalancing / Hot-Spot Relief ❌ **NOT IMPLEMENTED**
 
-1. ✅ **COMPLETED**: Implemented Migration Service
-   - Created data transfer protocols and APIs.
-   - Implemented online migration with minimal downtime.
-   - Added validation and verification post-migration.
+1. ❌ **REMOVED**: Migration Service
+   - Data migration functionality has been removed from the codebase.
+   - Schema migrations are handled by `migrate-all.ps1` script.
+   - Dynamic shard migration is not needed for basic sharding implementation.
 
-2. ✅ **COMPLETED**: Implemented Rebalancing Service
-   - Created load analysis algorithms.
-   - Implemented automatic rebalancing triggers.
-   - Added manual rebalancing API endpoints.
+2. ❌ **NOT IMPLEMENTED**: Rebalancing Service
+   - Load analysis algorithms not implemented.
+   - Automatic rebalancing triggers not implemented.
+   - Manual rebalancing API endpoints not implemented.
 
-3. ✅ **COMPLETED**: Implemented Hot-Spot Detection
-   - Created real-time traffic monitoring.
-   - Implemented dynamic shard splitting.
-   - Added temporary traffic redirection.
+3. ❌ **NOT IMPLEMENTED**: Hot-Spot Detection
+   - Real-time traffic monitoring not implemented.
+   - Dynamic shard splitting not implemented.
+   - Temporary traffic redirection not implemented.
 
-4. ✅ **COMPLETED**: Added Safety Mechanisms
-   - Implemented rate limiting during migrations.
-   - Added rollback capabilities.
-   - Supported gradual traffic shifting.
+4. ❌ **NOT IMPLEMENTED**: Safety Mechanisms
+   - Rate limiting during migrations not implemented.
+   - Rollback capabilities not implemented.
+   - Gradual traffic shifting not implemented.
+
+**Rationale**: Data migration functionality was removed as it's not needed for basic sharding. The current implementation focuses on distributing data across fixed shards. Schema migrations for new shards are handled by the `migrate-all.ps1` script.
 
 ### Phase 8: Cross-Shard Transaction Guarantees & Constraints ✅ **COMPLETED**
 

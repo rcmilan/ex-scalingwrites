@@ -21,7 +21,7 @@ builder.Services.AddSingleton<IShardDbContextFactory, ShardDbContextFactory>();
 builder.Services.AddSingleton<IDbContextFactory<ShardedDbContext>>(sp => 
     (IDbContextFactory<ShardedDbContext>)sp.GetRequiredService<IShardDbContextFactory>());
 builder.Services.AddSingleton<ICrossShardQueryCoordinator, CrossShardQueryCoordinator>();
-builder.Services.AddSingleton<IShardMigrationService, ShardMigrationService>();
+
 builder.Services.AddSingleton<ITransactionCoordinator, TransactionCoordinator>();
 
 builder.Services.AddSingleton<IShardResolutionStrategy, IntHashShardStrategy>();
