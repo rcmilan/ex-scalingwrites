@@ -6,16 +6,23 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
+// Add IMemoryCache support for caching
+builder.Services.AddMemoryCache();
+
 builder.Services.AddSingleton<IShardConfigurationService, ShardConfigurationService>();
-builder.Services.AddSingleton<IShardResolutionStrategy, ShardResolver>();
 builder.Services.AddSingleton<IShardDbContextFactory, ShardDbContextFactory>();
 builder.Services.AddSingleton<ICrossShardQueryCoordinator, CrossShardQueryCoordinator>();
-
 builder.Services.AddSingleton<ITransactionCoordinator, TransactionCoordinator>();
 
+// Register individual shard resolution strategies
 builder.Services.AddSingleton<IShardResolutionStrategy, IntHashShardStrategy>();
 builder.Services.AddSingleton<IShardResolutionStrategy, GuidHashShardStrategy>();
 builder.Services.AddSingleton<IShardResolutionStrategy, RangeShardStrategy>();
+
+// Register ShardResolver separately to avoid circular dependency
+// It will be automatically populated with all IShardResolutionStrategy implementations
+builder.Services.AddSingleton<ShardResolver>();
+
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
