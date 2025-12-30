@@ -54,16 +54,6 @@ public sealed class ShardMetadataStore(IConfiguration config, IMemoryCache cache
         return await LoadAndUpdateShardsAsync(forceReload: false);
     }
 
-    public Task<ShardDescriptor> GetShardAsync(object shardKey)
-    {
-        var shards = _shards;
-        if (shards.Count == 0)
-            return Task.FromResult<ShardDescriptor>(null!);
-
-        var shard = shards.FirstOrDefault(s => s.Name.Equals(shardKey?.ToString(), StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult<ShardDescriptor>(shard!);
-    }
-
     public async Task ReloadShardsAsync()
     {
         await LoadAndUpdateShardsAsync(forceReload: true);
