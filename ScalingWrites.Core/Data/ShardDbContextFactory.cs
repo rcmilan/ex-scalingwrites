@@ -3,25 +3,24 @@ using ScalingWrites.Core.Data.Configurations;
 
 namespace ScalingWrites.Core.Data;
 
-public sealed class ShardDbContextFactory(IShardResolutionStrategy resolver) : IShardDbContextFactory, IDbContextFactory<ShardedDbContext>
+public sealed class ShardDbContextFactory(IEnumerable<IShardResolutionStrategy> strategies) : IShardDbContextFactory, IDbContextFactory<ShardedDbContext>
 {
+    private readonly IEnumerable<IShardResolutionStrategy> _strategies = strategies ?? throw new ArgumentNullException(nameof(strategies));
+
     public async Task<ShardDescriptor> ResolveShardAsync(object shardKey)
     {
-        return resolver.Resolve(shardKey);
-    }
-
-    public Task<string> GetConnectionStringAsync(ShardDescriptor shard)
-    {
-        return Task.FromResult(shard.ConnectionString);
+        var strategy = _strategies.FirstOrDefault(s => s.CanResolve(shardKey));
+        return strategy is null
+            ? throw new InvalidOperationException($"No shard strategy registered for key type {shardKey?.GetType().Name}")
+            : strategy.Resolve(shardKey);
     }
 
     public async Task<ShardedDbContext> CreateScopedDbContextAsync(object shardKey)
     {
         var shard = await ResolveShardAsync(shardKey);
-        var connectionString = await GetConnectionStringAsync(shard);
 
         var optionsBuilder = new DbContextOptionsBuilder<ShardedDbContext>();
-        optionsBuilder.UseMySQL(connectionString);
+        optionsBuilder.UseMySQL(shard.ConnectionString);
 
         return new ShardedDbContext(optionsBuilder.Options);
     }
