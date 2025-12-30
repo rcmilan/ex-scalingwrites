@@ -13,13 +13,20 @@ builder.Services.AddSingleton(sp =>
     return ShardConfigurationHelper.LoadShards(config);
 });
 
-builder.Services.AddSingleton<IShardResolver, ShardResolver>();
+// Memory cache is registered by default in .NET
 
-builder.Services.AddSingleton<IShardedDbContextFactory, ShardedDbContextFactory>();
-builder.Services.AddSingleton<IDbContextFactory<ShardedDbContext>, ShardedDbContextFactory>();
+builder.Services.AddSingleton<IShardMetadataStore, ShardMetadataStore>();
+builder.Services.AddSingleton<IShardResolver, ShardResolver>();
+builder.Services.AddSingleton<IShardDbContextFactory, ShardDbContextFactory>();
+builder.Services.AddSingleton<IDbContextFactory<ShardedDbContext>>(sp => 
+    (IDbContextFactory<ShardedDbContext>)sp.GetRequiredService<IShardDbContextFactory>());
+builder.Services.AddSingleton<ICrossShardQueryCoordinator, CrossShardQueryCoordinator>();
+builder.Services.AddSingleton<IShardMigrationService, ShardMigrationService>();
+builder.Services.AddSingleton<ITransactionCoordinator, TransactionCoordinator>();
 
 builder.Services.AddSingleton<IShardResolutionStrategy, IntHashShardStrategy>();
 builder.Services.AddSingleton<IShardResolutionStrategy, GuidHashShardStrategy>();
+builder.Services.AddSingleton<IShardResolutionStrategy, RangeShardStrategy>();
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

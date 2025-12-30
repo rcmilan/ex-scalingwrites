@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MySql.Data.MySqlClient;
 using ScalingWrites.Core.Data;
 using ScalingWrites.Core.IO;
 using ScalingWrites.Core.Models;
@@ -13,14 +12,14 @@ public class UsersController : ControllerBase
 {
 
     [HttpPost]
-    public async Task<ActionResult<PostUserOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostUserInput input)
+    public async Task<ActionResult<PostUserOutput>> Post([FromServices] IShardDbContextFactory routingService, [FromBody] PostUserInput input)
     {
         var user = new User
         {
             Name = input.Name
         };
 
-        await using var db = contextFactory.CreateDbContext(user.Id);
+        await using var db = await routingService.CreateScopedDbContextAsync(user.Id);
         await using var tx = await db.Database.BeginTransactionAsync();
 
         try
@@ -40,9 +39,9 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<GetUserOutput>> Get([FromServices] IShardedDbContextFactory contextFactory, [FromRoute] Guid id)
+    public async Task<ActionResult<GetUserOutput>> Get([FromServices] IShardDbContextFactory routingService, [FromRoute] Guid id)
     {
-        await using var db = contextFactory.CreateDbContext(id);
+        await using var db = await routingService.CreateScopedDbContextAsync(id);
 
         var user = await db.Users.FindAsync(id);
 

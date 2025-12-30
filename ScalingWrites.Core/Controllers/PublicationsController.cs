@@ -12,7 +12,7 @@ namespace ScalingWrites.Core.Controllers;
 public class PublicationsController : ControllerBase
 {
     [HttpPost]
-    public async Task<ActionResult<PostPublicationOutput>> Post([FromServices] IShardedDbContextFactory contextFactory, [FromBody] PostPublicationInput input)
+    public async Task<ActionResult<PostPublicationOutput>> Post([FromServices] IShardDbContextFactory routingService, [FromBody] PostPublicationInput input)
     {
         var publication = new Publication
         {
@@ -22,7 +22,7 @@ public class PublicationsController : ControllerBase
 
         if (input.UserId.HasValue)
         {
-            await using var db = contextFactory.CreateDbContext(input.UserId.Value);
+            await using var db = await routingService.CreateScopedDbContextAsync(input.UserId.Value);
             await using var tx = await db.Database.BeginTransactionAsync();
 
             try
@@ -45,7 +45,7 @@ public class PublicationsController : ControllerBase
         }
         else
         {
-            await using var db = contextFactory.CreateDbContext(publication.Id);
+            await using var db = await routingService.CreateScopedDbContextAsync(publication.Id);
             await using var tx = await db.Database.BeginTransactionAsync();
 
             try
@@ -66,21 +66,18 @@ public class PublicationsController : ControllerBase
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<GetPublicationOutput>> Get(
-        [FromServices] IReadOnlyList<ShardDescriptor> shards,
-        [FromServices] IShardedDbContextFactory contextFactory,
+        [FromServices] ICrossShardQueryCoordinator queryCoordinator,
         [FromRoute] Guid id)
     {
-        foreach (var shard in shards)
-        {
-            await using var db = contextFactory.GetShardedDbContext(shard);
-
-            var publication = await db.Publications
+        var results = await queryCoordinator.ExecuteQueryOnAllShardsAsync(
+            db => db.Publications
                 .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == id);
+                .Where(p => p.Id == id)
+                .Select(p => new GetPublicationOutput(p.Id, p.Title, p.CreatedAt)));
 
-            if (publication != null)
-                return Ok(new GetPublicationOutput(publication.Id, publication.Title, publication.CreatedAt));
-        }
+        var publication = results.FirstOrDefault();
+        if (publication != null)
+            return Ok(publication);
 
         return NotFound();
     }

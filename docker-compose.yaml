@@ -1,4 +1,24 @@
 services:
+  # MySQL Shards
+  mysql_shard0:
+    image: mysql:8.0
+    container_name: mysql_shard0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass0
+      # no MYSQL_DATABASE so no initial DB
+    ports:
+      - "3306:3306"           # map host 3306 → container 3306
+    volumes:
+      - shard0_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
   mysql_shard1:
     image: mysql:8.0
     container_name: mysql_shard1
@@ -13,6 +33,10 @@ services:
     networks:
       - shard-net
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
   mysql_shard2:
     image: mysql:8.0
@@ -28,10 +52,76 @@ services:
     networks:
       - shard-net
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  mysql_shard3:
+    image: mysql:8.0
+    container_name: mysql_shard3
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass3
+      # no initial DB
+    ports:
+      - "3309:3306"           # map host 3309 → container 3306
+    volumes:
+      - shard3_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  mysql_shard4:
+    image: mysql:8.0
+    container_name: mysql_shard4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass4
+      # no initial DB
+    ports:
+      - "3310:3306"           # map host 3310 → container 3306
+    volumes:
+      - shard4_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  mysql_shard5:
+    image: mysql:8.0
+    container_name: mysql_shard5
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass5
+      # no initial DB
+    ports:
+      - "3311:3306"           # map host 3311 → container 3306
+    volumes:
+      - shard5_data:/var/lib/mysql
+    networks:
+      - shard-net
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
 volumes:
+
+  shard0_data:
   shard1_data:
   shard2_data:
+  shard3_data:
+  shard4_data:
+  shard5_data:
 
 networks:
   shard-net:
