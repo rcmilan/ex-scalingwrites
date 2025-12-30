@@ -2,7 +2,7 @@
 
 public class User
 {
-    public int Id { get; }
+    public Guid Id { get; } = Guid.NewGuid();
     public required string Name { get; set; }
     public List<Publication> Publications { get; } = [];
 }

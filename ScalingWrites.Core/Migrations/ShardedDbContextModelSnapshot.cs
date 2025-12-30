@@ -39,9 +39,9 @@ namespace ScalingWrites.Core.Migrations
 
             modelBuilder.Entity("ScalingWrites.Core.Models.User", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("char(36)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -57,8 +57,8 @@ namespace ScalingWrites.Core.Migrations
                     b.Property<Guid>("PublicationsId")
                         .HasColumnType("char(36)");
 
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("char(36)");
 
                     b.HasKey("PublicationsId", "UserId");
 
