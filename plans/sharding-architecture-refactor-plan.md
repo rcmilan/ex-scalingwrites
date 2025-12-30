@@ -114,10 +114,12 @@ graph TD
 
 ```mermaid
 graph TD
-    A[Docker Compose] --> B[Shard Metadata Service]
-    A --> C[Shard1]
-    A --> D[Shard2]
-    A --> E[ShardN]
+    A[Docker Compose] --> B[Shard1]
+    A --> C[Shard2]
+    A --> D[ShardN]
+    B --> E[In-Memory Cache]
+    C --> E
+    D --> E
 ```
 
 **Implementation Steps**:
@@ -129,7 +131,7 @@ graph TD
 
 ### 6. Resilient Shard Metadata Persistence Model
 
-**Purpose**: Ensure the shard metadata store can persist and recover from failures.
+**Purpose**: Ensure the shard metadata store can persist and recover from failures while simplifying the architecture.
 
 **Design**:
 
@@ -139,7 +141,7 @@ graph TD
     A --> C[Backup Storage]
     A --> D[Recovery Mechanism]
     B --> E[Database]
-    C --> F[Distributed Cache]
+    C --> F[In-Memory Cache]
     D --> G[Snapshot Restore]
     D --> H[Log Replay]
 ```
@@ -151,7 +153,7 @@ graph TD
 3. **Recovery Mechanism**:
    - Implement snapshot-based recovery for quick restoration.
    - Add transaction log replay for point-in-time recovery.
-4. **Caching Layer**: Use Redis or similar for caching frequently accessed metadata to improve performance.
+4. **Caching Layer**: Use `IMemoryCache` for caching frequently accessed metadata to improve performance while simplifying the architecture.
 5. **Consistency Checks**: Implement periodic consistency checks between primary and backup storage.
 6. **Failure Detection**: Add health monitoring and automatic failover mechanisms.
 
@@ -311,21 +313,23 @@ graph TD
 
 ### Phase 5: Updated Docker Compose
 
-1. **Add Shard Metadata Service**
-   - Create a new service for the Shard Metadata Store.
-   - Configure the service to load shard configurations and support dynamic reloads.
+1. **Remove Shard Metadata Service (Redis)**
+   - The Shard Metadata Service (Redis) has been removed from the architecture.
+   - Shard metadata is now managed in-memory using `IMemoryCache` for improved performance and simplified deployment.
+   - This eliminates the need for a separate Redis container in the Docker Compose setup.
 
 2. **Update MySQL Shard Configurations**
-   - Add more shards for better scalability.
+   - Configure multiple MySQL shards for better scalability.
    - Configure health checks and readiness probes for each shard.
+   - Current implementation includes 6 shards (Shard0-Shard5) for distributed data storage.
 
 3. **Configure Networking**
-   - Ensure proper communication between services.
-   - Configure networking to support cross-shard queries.
+   - Ensure proper communication between the application and MySQL shards.
+   - Configure networking to support cross-shard queries without external Redis dependency.
 
 4. **Update `appsettings.json`**
-   - Add connection strings for the new shards.
-   - Configure the Shard Metadata Store to use the new shard configurations.
+   - Add connection strings for all configured MySQL shards.
+   - Configure in-memory caching settings for shard metadata management.
 
 ### Phase 6: Resilient Shard Metadata Persistence Model
 
@@ -340,7 +344,7 @@ graph TD
    - Add restore functionality from snapshots and logs.
 
 3. **Add Caching Layer**
-   - Implement Redis cache for frequently accessed metadata.
+   - Implement `IMemoryCache` for frequently accessed metadata to simplify the architecture while maintaining core functionality.
    - Add cache invalidation mechanisms.
    - Implement cache warming on startup.
 
