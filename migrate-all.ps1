@@ -25,8 +25,19 @@ Write-Host "Starting migration process..." -ForegroundColor Yellow
 foreach ($shard in $shards) {
     Write-Host "Migrating $shard..." -ForegroundColor Cyan
     try {
-        Update-Database -Args "--shard=$shard" -Verbose
-        Write-Host "Successfully migrated $shard" -ForegroundColor Green
+        # Get the connection string for this shard
+        $connectionString = $config.ConnectionStrings.$shard
+        if ([string]::IsNullOrEmpty($connectionString)) {
+            throw "Connection string not found for shard $shard"
+        }
+        
+        # Run EF Core migration using dotnet CLI with connection string
+        $result = dotnet ef database update --connection "$connectionString" --context ShardedDbContext --project ScalingWrites.Core
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Successfully migrated $shard" -ForegroundColor Green
+        } else {
+            throw "EF Core command failed with exit code $LASTEXITCODE"
+        }
     }
     catch {
         Write-Host "Failed to migrate $shard : $_" -ForegroundColor Red
