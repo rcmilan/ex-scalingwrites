@@ -1,15 +1,8 @@
 ﻿namespace ScalingWrites.Core.Data.Configurations;
 
-public sealed class ShardResolver : IShardResolutionStrategy
+public sealed class ShardResolver(IEnumerable<IShardResolutionStrategy> strategies) : IShardResolutionStrategy
 {
-    private readonly IShardConfigurationService _shardConfig;
-    private readonly IEnumerable<IShardResolutionStrategy> _strategies;
-
-    public ShardResolver(IShardConfigurationService shardConfig, IEnumerable<IShardResolutionStrategy> strategies)
-    {
-        _shardConfig = shardConfig ?? throw new ArgumentNullException(nameof(shardConfig));
-        _strategies = strategies ?? throw new ArgumentNullException(nameof(strategies));
-    }
+    private readonly IEnumerable<IShardResolutionStrategy> _strategies = strategies ?? throw new ArgumentNullException(nameof(strategies));
 
     public bool CanResolve(object shardKey)
     {
